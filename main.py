@@ -5,6 +5,9 @@ import tensorflow as tf
 from hyperopt import hp, tpe, Trials, fmin, space_eval, STATUS_OK
 import numpy as np 
 import functions as fun
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score
+from sklearn.tree import DecisionTreeClassifier
 
 dataset = pd.read_csv('loan-train.xls')
 dataset.info()
@@ -40,7 +43,7 @@ y_test = test_set['Loan_Status']
 
 
 """
-DATA EXPLORING 
+DATA EXPLORATION
 """
 
 i = 0
@@ -63,9 +66,10 @@ plt.savefig('./data_ex/correlation.png')
 plt.show()
 
 
+# Hyperfunction for hyperparameter tuning
 def hyperfunc(params):
-    model = fun.train_hyper_param_model(x_train, y_train, params, epochs=15)
-    test_loss, test_acc = model.evaluate(x_test, y_test)
+    model1 = fun.train_hyper_param_model(x_train, y_train, params, epochs=15)
+    test_loss, test_acc = model1.evaluate(x_test, y_test)
 
     return {'loss': test_loss, 'accuracy': test_acc, 'status': STATUS_OK}
 
@@ -87,27 +91,34 @@ def main():
     fun.hyper_plots(trials, 'accuracy')
     fun.hyper_plots(trials, 'loss')
 
-    model = fun.loan_elig_model()
-    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.01), 
+    # Neural net model 
+    model1 = fun.loan_elig_model()
+    model1.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.01), 
                   loss=tf.keras.losses.binary_crossentropy,
                   metrics=['accuracy'])
-    history = model.fit(x_train, y_train, epochs=60, validation_split=0.8, callbacks=[
+    history = model1.fit(x_train, y_train, epochs=60, validation_split=0.8, callbacks=[
         tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=10)])
     fun.plot_metrics(history, 'loss', 'LOSS')
     fun.plot_metrics(history, 'accuracy', 'ACCURACY')
-    test_loss, test_accuracy = model.evaluate(x_test, y_test)
+    test_loss, test_accuracy = model1.evaluate(x_test, y_test)
     print("Test loss:", test_loss)
     print("Test accuracy:", test_accuracy)
+
+    # Logistic regression
+    model2 = LogisticRegression()
+    model2.fit(x_train, y_train)
+    y_pred = model2.predict(x_test)
+
+    accuracy = accuracy_score(y_test, y_pred)
+    print('Accuracy:', accuracy)
+
+    # Decision tree classifier
+    dt = DecisionTreeClassifier()
+    dt.fit(x_train, y_train)
+    y_pred = dt.predict(x_test)
+    acc = accuracy_score(y_test, y_pred)
+    print('Accuracy:', acc)
 
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
-
