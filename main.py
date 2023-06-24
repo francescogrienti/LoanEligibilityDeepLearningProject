@@ -2,12 +2,12 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import tensorflow as tf
-from hyperopt import hp, tpe, Trials, fmin, space_eval, STATUS_OK
-import numpy as np 
 import functions as fun
+from sklearn.model_selection import RandomizedSearchCV
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
 from sklearn.tree import DecisionTreeClassifier
+
 
 dataset = pd.read_csv('loan-train.xls')
 dataset.info()
@@ -28,19 +28,22 @@ dataset['Loan_Status'] = dataset['Loan_Status'].map({'Y': 1.0, 'N': 0.})
 for i in dataset.columns[1:]:
     dataset[i] = (dataset[i] - dataset[i].min()) / (dataset[i].max() - dataset[i].min())
 
-train_set = dataset.sample(frac=0.8, random_state=42)
+train_set = dataset.sample(frac=0.8, random_state=1)
 test_set = dataset.drop(train_set.index)
+valid_set = train_set.sample(frac=0.2, random_state=1)
 
 x_train = train_set[['Dependents', 'Self_Employed', 'ApplicantIncome',
                     'CoapplicantIncome', 'LoanAmount', 'Loan_Amount_Term',
                     'Credit_History', 'Property_Area']]
 y_train = train_set['Loan_Status']
-
+x_valid = valid_set[['Dependents', 'Self_Employed', 'ApplicantIncome',
+                         'CoapplicantIncome', 'LoanAmount', 'Loan_Amount_Term',
+                         'Credit_History', 'Property_Area']]
+y_valid = valid_set['Loan_Status']
 x_test = test_set[['Dependents', 'Self_Employed', 'ApplicantIncome',
                          'CoapplicantIncome', 'LoanAmount', 'Loan_Amount_Term',
                          'Credit_History', 'Property_Area']]
 y_test = test_set['Loan_Status']
-
 
 """
 DATA EXPLORATION
@@ -65,58 +68,58 @@ plt.title('Correlation Matrix')
 plt.savefig('./data_ex/correlation.png')
 plt.show()
 
-
-# Hyperfunction for hyperparameter tuning
-def hyperfunc(params):
-    model1 = fun.train_hyper_param_model(x_train, y_train, params, epochs=15)
-    test_loss, test_acc = model1.evaluate(x_test, y_test)
-
-    return {'loss': test_loss, 'accuracy': test_acc, 'status': STATUS_OK}
-
 """
 MAIN 
 """
 
 def main():
 
-    search_space = {
-        'layer1_size': hp.choice('layer1_size', np.arange(1, 20, 2)),
-        'layer2_size': hp.choice('layer2_size', np.arange(1, 10, 1)),
-        'learning_rate': hp.loguniform('learning_rate', -10, 0)
-    }
-    trials = Trials()
-    best = fmin(hyperfunc, search_space, algo=tpe.suggest, max_evals=5, trials=trials)
-    print(space_eval(search_space, best))
-
-    fun.hyper_plots(trials, 'accuracy')
-    fun.hyper_plots(trials, 'loss')
-
-    # Neural net model 
-    model1 = fun.loan_elig_model()
-    model1.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.01), 
-                  loss=tf.keras.losses.binary_crossentropy,
-                  metrics=['accuracy'])
-    history = model1.fit(x_train, y_train, epochs=60, validation_split=0.8, callbacks=[
-        tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=10)])
-    fun.plot_metrics(history, 'loss', 'LOSS')
-    fun.plot_metrics(history, 'accuracy', 'ACCURACY')
-    test_loss, test_accuracy = model1.evaluate(x_test, y_test)
-    print("Test loss:", test_loss)
-    print("Test accuracy:", test_accuracy)
-
+    tf.random.set_seed(1)
+    print('--- Initialising neural net model ---')
+    model = fun.loan_elig_model()
+    print('--- Training with starting hyperparameters set ---')
+    history = model.fit(x_train, y_train, epochs=60, validation_data=(x_valid, y_valid), batch_size=32)
+    fun.plot_metrics(history, 'loss', 'Loss')
+    fun.plot_metrics(history, 'accuracy', 'Accuracy')
+    loss, accuracy = model.evaluate(x_test, y_test)
+    print("Accuracy on test set with no hyperparameters tuning {:.2f}".format(accuracy))
+    print("Loss on test set with no hyperparameters tuning {:.2f}".format(loss))
+    print('--- Hyperparameters tuning using RandomSearch ---')
+    model = tf.keras.wrappers.scikit_learn.KerasClassifier(build_fn=fun.loan_elig_model, verbose=0)
+    layer1_size = [2,10,20,30,40,50,60,70,80,90,100]
+    layer2_size = [3,5,10,15,20,25,30,35,40,45,50,55,60] 
+    learning_rate = [0.01, 0.001, 0.0001]
+    batch_size = [4,8,16,32]
+    epochs = [10,20,30,40,50,60,70,80,100]
+    grid = dict(
+        layer1_size=layer1_size,
+        layer2_size=layer2_size,
+        learning_rate=learning_rate,
+        batch_size=batch_size,
+        epochs=epochs
+    )   
+    searcher = RandomizedSearchCV(estimator=model, n_jobs=-1, cv=5, param_distributions=grid, n_iter=50, scoring=('accuracy'))
+    search_results = searcher.fit(x_valid, y_valid)
+    best_score = search_results.best_score_
+    best_params = search_results.best_params_
+    print('Best score is {:.2f} using {}'.format(best_score, best_params))
+    best_model = search_results.best_estimator_
+    accuracy = best_model.score(x_test, y_test)
+    print("Accuracy on test set {:.2f}".format(accuracy))
+    
     # Logistic regression
     model2 = LogisticRegression()
     model2.fit(x_train, y_train)
     y_pred = model2.predict(x_test)
-
     accuracy = accuracy_score(y_test, y_pred)
+    print('----- Logistic regression -----')
     print('Accuracy:', accuracy)
-
     # Decision tree classifier
     dt = DecisionTreeClassifier()
     dt.fit(x_train, y_train)
     y_pred = dt.predict(x_test)
     acc = accuracy_score(y_test, y_pred)
+    print('----- Decision tree classifier -----')
     print('Accuracy:', acc)
 
 
