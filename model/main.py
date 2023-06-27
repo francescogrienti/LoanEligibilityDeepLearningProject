@@ -9,7 +9,7 @@ from sklearn.metrics import accuracy_score
 from sklearn.tree import DecisionTreeClassifier
 
 
-dataset = pd.read_csv('loan-train.xls')
+dataset = pd.read_csv('~/DL/DeepLearning/LoanEligibilityDeepLearningProject/dataset/loan-train.xls')
 dataset.info()
 
 """
@@ -58,14 +58,14 @@ for col in dataset.columns:
     plt.ylabel('Frequency')
     plt.legend()
     i+=1
-plt.savefig('./data_ex/histograms.png')
+plt.savefig('/home/francescogrienti/DL/DeepLearning/LoanEligibilityDeepLearningProject/data_preprocessing/histograms.png')
 plt.show()
 
 plt.figure(figsize=(20, 10))
 correlation_matrix = dataset.corr()
 sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm')
 plt.title('Correlation Matrix')
-plt.savefig('./data_ex/correlation.png')
+plt.savefig('/home/francescogrienti/DL/DeepLearning/LoanEligibilityDeepLearningProject/data_preprocessing/correlation.png')
 plt.show()
 
 """
@@ -98,7 +98,7 @@ def main():
         batch_size=batch_size,
         epochs=epochs
     )   
-    searcher = RandomizedSearchCV(estimator=model, n_jobs=-1, cv=5, param_distributions=grid, n_iter=50, scoring=('accuracy'))
+    searcher = RandomizedSearchCV(estimator=model, n_jobs=-1, cv=5, param_distributions=grid, n_iter=100, scoring='accuracy')
     search_results = searcher.fit(x_valid, y_valid)
     best_score = search_results.best_score_
     best_params = search_results.best_params_

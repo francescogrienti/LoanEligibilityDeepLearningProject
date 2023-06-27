@@ -13,7 +13,7 @@ def plot_metrics(history, metric:str, title:str):
     plt.ylabel(metric)
     plt.title(title)
     plt.legend()
-    plt.savefig('./metrics/' + metric +'.png')
+    plt.savefig('/home/francescogrienti/DL/DeepLearning/LoanEligibilityDeepLearningProject/metrics/' + metric +'.png')
     plt.show()
 
 
